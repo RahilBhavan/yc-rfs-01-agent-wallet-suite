@@ -72,6 +72,9 @@ the scope's revised SDK-bundle prediction, with the bare-enforcer result explici
 The integration runs `make test` (Python collector tests and all Solidity cases) and `make reproduce` against the
 pinned dependencies. The exact measurement and commit are in results.md. Source-only limits remain explicit:
 the SDK TypeScript is not executed, and Coinbase's absent calldata/method interfaces are source-inspection claims.
+The measured code SHA and the commit that stores its output can differ: use results.md's `Commit` field when
+repeating the recorded run, and preserve the newer results reference before detaching the clone. A proposed
+integration should also be tested at its own full SHA and identified separately in the receipt.
 
 Isolated thread worktrees initially lacked complete recursive dependencies. Those setup failures were not case
 outcomes. The integrated checkout has initialized pins and passes the recorded run. A different reviewer must still

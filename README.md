@@ -17,8 +17,10 @@ fetch recursive submodules and install solc 0.8.23 and 0.8.30. Tests use local s
 no RPC URL, wallet credentials, funded account or running Anvil is required.
 
 ```sh
-git clone --recurse-submodules https://github.com/RahilBhavan/yc-rfs-01-agent-wallet-suite.git
-cd yc-rfs-01-agent-wallet-suite
+mkdir -p "$HOME/scratch/yc-rfs-builds"
+git clone --recurse-submodules https://github.com/RahilBhavan/yc-rfs-01-agent-wallet-suite.git \
+  "$HOME/scratch/yc-rfs-builds/wallet-local-run"
+cd "$HOME/scratch/yc-rfs-builds/wallet-local-run"
 forge --version
 make test
 make reproduce
@@ -26,6 +28,8 @@ make reproduce
 
 `make test` bootstraps compilation; `make reproduce` invokes `forge test --offline`, validates the case rows and
 prints the table and headline. Offline execution requires the compilers and sources to be present already.
+This quick start tests the clone's default branch. Use the reproduction guide to select the recorded measurement
+or a proposed integration commit explicitly. Choose an unused scratch directory for each run.
 For a clone without submodules, run `git submodule update --init --recursive` before testing.
 Use [the reproduction guide](docs/reproduction.md) for an exact recorded-commit checkout, dependency checks,
 troubleshooting, the minimal headline trace and an independent review receipt.

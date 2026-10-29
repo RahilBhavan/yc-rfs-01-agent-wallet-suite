@@ -7,6 +7,7 @@ per case, then picks the headline by the scope's rule (docs/scope.md, decision 2
 headline. Exits non-zero if forge fails, a test fails, or a case row is missing or duplicated.
 """
 
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -60,12 +61,64 @@ def provenance():
                 fail(f"{path} {revision} gitlink differs from pinned commit {pin}")
         if git("-C", path, "rev-parse", "HEAD") != pin:
             fail(f"{path} checkout differs from pinned commit {pin}")
+        if git("-C", path, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"):
+            fail(f"{path} contains local changes; citations require unchanged pinned sources")
     # Nested dependencies are pinned by each upstream's gitlinks as well.
     status = git("submodule", "status", "--recursive")
     if any(line.startswith(("-", "+", "U")) for line in status.splitlines()):
         fail("submodules missing or not at pinned gitlinks; initialize recursively before reproducing")
     dirty = git("status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none")
     return git("rev-parse", "HEAD") + ("+dirty" if dirty else "")
+
+
+def worktree_fingerprint():
+    """Detect edits during a run even when both endpoints are already dirty."""
+    digest = hashlib.sha256(git("diff", "--binary", "HEAD", "--", ".").encode())
+    paths = git("ls-files", "--others", "--exclude-standard", "-z")
+    for name in sorted(filter(None, paths.split("\0"))):
+        path = ROOT / name
+        digest.update(name.encode())
+        digest.update(b"\0")
+        try:
+            digest.update(path.read_bytes())
+        except OSError as exc:
+            fail(f"cannot fingerprint {name}: {exc}")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def validate_citation(citation):
+    match = re.fullmatch(r"(lib/(?:df|sp)/[^ :;]+):([1-9][0-9]*)", citation)
+    if not match:
+        fail(f"invalid citation: {citation}")
+    name, number = match.groups()
+    path = ROOT / name
+    upstream = ROOT / "/".join(name.split("/")[:2])
+    if not path.resolve().is_relative_to(upstream.resolve()):
+        fail(f"citation escapes pinned source: {citation}")
+    # A contained file can still be local metadata or an ignored build artifact.
+    # Require a committed blob, following only gitlinks in the upstream tree.
+    repository = Path(git("-C", str(path.parent), "rev-parse", "--show-toplevel"))
+    source_repository = repository
+    while repository != upstream:
+        parent = Path(git("-C", str(repository.parent), "rev-parse", "--show-toplevel"))
+        if parent == repository or not repository.is_relative_to(parent) or not parent.is_relative_to(upstream):
+            fail(f"citation is not in a pinned repository: {citation}")
+        entry = git("-C", str(parent), "ls-tree", "HEAD", "--", str(repository.relative_to(parent)))
+        fields = entry.split()
+        if len(fields) < 3 or fields[:2] != ["160000", "commit"] or fields[2] != git("-C", str(repository), "rev-parse", "HEAD"):
+            fail(f"citation repository is not a pinned gitlink: {citation}")
+        repository = parent
+    entry = git("-C", str(source_repository), "ls-tree", "HEAD", "--", str(path.relative_to(source_repository)))
+    fields = entry.split()
+    if len(fields) < 2 or fields[0] not in ("100644", "100755") or fields[1] != "blob":
+        fail(f"citation is not a committed source file: {citation}")
+    try:
+        lines = path.read_text().splitlines()
+    except (OSError, UnicodeError) as exc:
+        fail(f"cannot read cited source {citation}: {exc}")
+    if int(number) > len(lines):
+        fail(f"citation line does not exist: {citation}")
 
 
 def unique_object(pairs):
@@ -134,9 +187,8 @@ def collect(suites):
                     fail(f"empty or control characters in row from {name}")
                 if fields[2] != CLASSES[case] or fields[5] not in ("agree", "differ"):
                     fail(f"invalid class or result from {name}")
-                if not all(re.fullmatch(r"lib/(?:df|sp)/[^ :;]+:[1-9][0-9]*", cite)
-                           for cite in fields[6].split("; ")):
-                    fail(f"invalid citation from {name}")
+                for cite in fields[6].split("; "):
+                    validate_citation(cite)
                 rows[case] = dict(zip(["case", "name", "cls", "mm", "cb", "result", "cite"], fields))
             if expected is not None and count != 1:
                 fail(f"{name} must emit exactly one row")
@@ -169,11 +221,12 @@ def cell(s):
 
 def main():
     commit = provenance()
+    fingerprint = worktree_fingerprint()
     suites = run_forge()
     rows, failed, total = collect(suites)
     if failed:
         fail("failing tests:\n  " + "\n  ".join(failed))
-    if provenance() != commit:
+    if provenance() != commit or worktree_fingerprint() != fingerprint:
         fail("repository state changed during reproduction")
     print(f"commit {commit}")
     print(

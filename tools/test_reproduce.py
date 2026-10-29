@@ -6,7 +6,9 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import reproduce as r
@@ -19,7 +21,7 @@ def fixture():
             "decoded_logs": ["\t".join([
                 "ROW", str(case), f"case {case}", r.CLASSES[case], "accepted", "rejected",
                 "differ" if case in (2, 3, 10) else "agree",
-                "lib/df/src/Example.sol:1; lib/sp/src/Example.sol:2",
+                "lib/df/src/DelegationManager.sol:1; lib/sp/src/SpendPermissionManager.sol:2",
             ])],
         } for case in r.CASES
     }}}
@@ -105,6 +107,23 @@ class CollectorTests(unittest.TestCase):
             first(data)["decoded_logs"] = [line]
             with self.assertRaisesRegex(r.ReproductionError, "malformed row"):
                 r.collect(data)
+
+    def test_citation_must_exist_within_pinned_source(self):
+        for citation in ("lib/df/src/NotAFile.sol:1",
+                         "lib/df/src/DelegationManager.sol:999999",
+                         "lib/df/../../README.md:1"):
+            data = fixture()
+            fields = first(data)["decoded_logs"][0].split("\t")
+            fields[7] = citation
+            first(data)["decoded_logs"] = ["\t".join(fields)]
+            with self.subTest(citation=citation), self.assertRaises(r.ReproductionError):
+                r.collect(data)
+
+    def test_citation_must_be_committed_in_pinned_tree(self):
+        with self.assertRaisesRegex(r.ReproductionError, "not a committed source file"):
+            r.validate_citation("lib/df/.git:1")
+        # Legitimate nested dependencies remain valid citation sources.
+        r.validate_citation("lib/df/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol:195")
 
     def test_unsuccessful_test_cannot_publish(self):
         for status in ("Failure", "Skipped", None):
@@ -196,7 +215,7 @@ class ProvenanceTests(unittest.TestCase):
         if args[0] == "rev-parse" and args[1] != "HEAD":
             return r.PINS[args[1].split(":")[-1]]
         if args[0] == "-C":
-            return r.PINS[args[1]]
+            return "" if args[2] == "status" else r.PINS[args[1]]
         if args[0] == "submodule":
             return " b4b8 lib/df\n e000 lib/sp"
         if args[0] == "status":
@@ -225,6 +244,42 @@ class ProvenanceTests(unittest.TestCase):
                 return " b4b8 lib/df\n" + marker + "abc lib/df/lib/dependency" if args[0] == "submodule" else self.git(*args)
             with patch.object(r, "git", side_effect=git), self.assertRaisesRegex(r.ReproductionError, "pinned gitlinks"):
                 r.provenance()
+
+    def test_modified_upstream_cannot_claim_pinned_sources(self):
+        for status in (" M src/DelegationManager.sol", "?? src/extra.sol", " m lib/dependency"):
+            def git(*args):
+                return status if args[:3] == ("-C", "lib/df", "status") else self.git(*args)
+            with patch.object(r, "git", side_effect=git), self.assertRaisesRegex(r.ReproductionError, "unchanged pinned sources"):
+                r.provenance()
+
+    def test_dirty_content_change_during_run_cannot_publish(self):
+        with patch.object(r, "provenance", return_value="abc+dirty"), \
+                patch.object(r, "worktree_fingerprint", side_effect=["before", "after"]), \
+                patch.object(r, "run_forge", return_value=fixture()):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), self.assertRaisesRegex(r.ReproductionError, "state changed"):
+                r.main()
+            self.assertEqual(output.getvalue(), "")
+
+    def test_fingerprint_tracks_dirty_and_untracked_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", directory], check=True)
+            subprocess.run(["git", "-C", directory, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                            "commit", "-q", "--allow-empty", "-m", "fixture"], check=True)
+            tracked = root / "tracked.txt"
+            tracked.write_text("original")
+            subprocess.run(["git", "-C", directory, "add", "tracked.txt"], check=True)
+            untracked = root / "untracked.txt"
+            untracked.write_text("first")
+            with patch.object(r, "ROOT", root):
+                before = r.worktree_fingerprint()
+                tracked.write_text("changed")
+                after_tracked = r.worktree_fingerprint()
+                untracked.write_text("second")
+                after_untracked = r.worktree_fingerprint()
+            self.assertNotEqual(before, after_tracked)
+            self.assertNotEqual(after_tracked, after_untracked)
 
 
 if __name__ == "__main__":
