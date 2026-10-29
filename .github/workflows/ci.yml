@@ -9,6 +9,8 @@ jobs:
           submodules: recursive
       - if: hashFiles('foundry.toml') != ''
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.6
       - if: hashFiles('pyproject.toml') != ''
         uses: astral-sh/setup-uv@v6
       - if: hashFiles('package.json') != ''
@@ -18,3 +20,5 @@ jobs:
       - if: hashFiles('package.json') != ''
         run: npm ci
       - run: make test
+      - if: hashFiles('foundry.toml') != ''
+        run: make reproduce

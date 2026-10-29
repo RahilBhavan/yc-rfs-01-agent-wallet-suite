@@ -6,5 +6,6 @@ test:
 	elif [ -f package.json ]; then npm test; \
 	else echo "no test suite yet"; fi
 
+# Runs the suite offline and prints one row per scope case, then the headline (tools/reproduce.py).
 reproduce:
-	@echo "headline not measured yet: replace this target with the command that prints it" >&2; exit 1
+	@python3 tools/reproduce.py
