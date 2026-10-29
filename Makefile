@@ -1,11 +1,11 @@
-.PHONY: test reproduce
+.PHONY: test test-tools reproduce
 
-test:
-	@if [ -f foundry.toml ]; then forge test; \
-	elif [ -f pyproject.toml ]; then uv run pytest; \
-	elif [ -f package.json ]; then npm test; \
-	else echo "no test suite yet"; fi
+test: test-tools
+	forge test
 
-# Runs the suite offline and prints one row per scope case, then the headline (tools/reproduce.py).
+test-tools:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_*.py' -v
+
+# Offline local suite, validated case rows and pinned upstream provenance.
 reproduce:
-	@python3 tools/reproduce.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 tools/reproduce.py
