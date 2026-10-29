@@ -10,7 +10,7 @@ like-for-like rule.
 
 ## Results
 
-Measured Oct 29, 2026 at commit `3bcc6ca`, against MetaMask delegation-framework `b4b8c41` and Coinbase
+Measured Oct 29, 2026 at commit `b982780`, against MetaMask delegation-framework `b4b8c41` and Coinbase
 spend-permissions `e0004e6`. Source: [results.md](results.md), which holds the full `make reproduce` output.
 
 - **Headline, case 2 (zero-value spend):** at `S+10`, MetaMask accepts `transfer(spender, 0)` and Coinbase reverts
@@ -23,8 +23,9 @@ spend-permissions `e0004e6`. Source: [results.md](results.md), which holds the f
 - **Differences the rule excludes from the headline:** pause and resume (case 3: 60 left the MetaMask wallet in the
   period, 120 left the Coinbase wallet), the recipient (case 10: MetaMask's bundle lets the agent pay any address,
   Coinbase always pays the spender), `start = 0` (case 14) and amounts above `uint160` (case 15).
-- **One prediction was wrong:** case 12's `transferFrom` is rejected by the calldata length check, not the method
-  check the scope predicted. The details are in [results.md](results.md#predictions-that-were-wrong).
+- **Two predicted reasons were wrong, no outcomes:** case 12's `transferFrom` is rejected by the calldata length
+  check, not the method check, and case 13's batch mode is rejected by `ValueLteEnforcer`, not the period enforcer.
+  The details are in [results.md](results.md#predictions-that-were-wrong).
 
 ## How it works
 
@@ -33,8 +34,8 @@ spend-permissions `e0004e6`. Source: [results.md](results.md), which holds the f
   Coinbase: a real `CoinbaseSmartWallet` with the manager as an owner, an approved `SpendPermission` and `spend` from
   the agent.
 - Each case is one test, `test_caseN_<what>`. It asserts what each side does and checks every rejection against its
-  exact revert data (error string or custom-error selector with arguments), so a setup error cannot pass as an
-  expected refusal. It then logs one result row.
+  exact revert data (error string or custom-error selector with arguments; in case 15, the empty revert of a failed
+  ABI decode, next to a control that passes), so a setup error cannot pass as an expected refusal. It then logs one result row.
 - `src/SpImports.sol` compiles Coinbase's manager with solc 0.8.30, because it needs `^0.8.28`. The tests, pinned to
   0.8.23, load it with `vm.deployCode`.
 - `tools/reproduce.py` runs `forge test --offline`, checks that all 16 cases ran and passed, prints the table and picks

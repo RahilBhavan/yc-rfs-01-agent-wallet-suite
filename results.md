@@ -7,7 +7,7 @@ systems that encode the same rule in different ways. It is not a claim of a bug 
 |---|---|
 | Headline | Case 2, zero-value spend: MetaMask accepts `transfer(spender, 0)`, Coinbase reverts `ZeroValue` |
 | Command | `make reproduce` |
-| Commit | `3bcc6cafa4955809f97baf1ec98537cea85a6ee4` |
+| Commit | `b9827800f1a5aec7ed67f6586e6193d48c69bc37` |
 | Measured on | Oct 29, 2026 (forge 1.8.6, solc 0.8.23 and 0.8.30) |
 | Upstreams | MetaMask delegation-framework `b4b8c41`, Coinbase spend-permissions `e0004e6` (submodules in `lib/`) |
 | Tests | 16 of 16 passed, one per scope case |
@@ -20,7 +20,7 @@ otherwise. Each row comes from one test in `test/Differential.t.sol`; the test a
 exact revert data of every rejection.
 
 ```text
-commit 3bcc6cafa4955809f97baf1ec98537cea85a6ee4
+commit b9827800f1a5aec7ed67f6586e6193d48c69bc37
 MetaMask delegation-framework b4b8c41, Coinbase spend-permissions e0004e6
 
 | Case | Class | MetaMask (HybridDeleGator + kit ERC-20 periodic scope) | Coinbase (SpendPermissionManager) | Result | file:line |
@@ -38,8 +38,8 @@ MetaMask delegation-framework b4b8c41, Coinbase spend-permissions e0004e6
 | 11. native twin with ERC-20 calldata | no CB calldata path | kit scope: token.transfer(X, 1000) invalid-calldata, 0 TST moved (bare enforcer: ok, 1000 TST moved) | native spend has no calldata input; spend(1) moved 1 wei, 0 TST | agree | lib/df/src/enforcers/ExactCalldataEnforcer.sol:44; lib/df/src/enforcers/NativeTokenPeriodTransferEnforcer.sol:169; lib/sp/src/SpendPermissionManager.sol:731 |
 | 12. wrong method | no CB method path | approve invalid-method; transferFrom invalid-execution-length | no entry point; spender's wallet.execute(approve) Unauthorized | agree | lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:183; lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:188; lib/sp/lib/smart-wallet/src/CoinbaseSmartWallet.sol:80 |
 | 13. two spends in one transaction | like-for-like | 60+60 in one redeemDelegations transfer-amount-exceeded, 0 moved; 50+50 ok | 60+60 from a spender contract ExceededSpendPermission, 0 moved; 50+50 ok | agree | lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:218; lib/sp/src/SpendPermissionManager.sol:712 |
-| 14. zero start in config | configuration (kit refuses to build it) | hand-built startDate 0: invalid-zero-start-date | start 0 approved; spend(100) ok | differ | lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:194; lib/sp/src/SpendPermissionManager.sol:651 |
-| 15. amount above uint160 | expressibility (CB is uint160) | periodAmount 2^160 signed; spend of 2^160 ok | allowance 2^160 does not decode (uint160 field); approve reverts | differ | lib/sp/src/SpendPermissionManager.sol:37; lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:157 |
+| 14. zero start in config | configuration (kit refuses per source, not run) | hand-built startDate 0: invalid-zero-start-date | start 0 approved; spend(100) ok | differ | lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:194; lib/sp/src/SpendPermissionManager.sol:651 |
+| 15. amount above uint160 | expressibility (CB is uint160) | periodAmount 2^160 signed; spend of 2^160 ok | approve with allowance 2^160 reverts in ABI decoding (2^160 - 1 approves) | differ | lib/sp/src/SpendPermissionManager.sol:37; lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:157 |
 | 16. underlying transfer fails | like-for-like | 60 with balance 50: ERC20InsufficientBalance; 100 still available | 60 with balance 50: ERC20InsufficientBalance; 0 spent in period | agree | lib/df/lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol:195; lib/sp/src/SpendPermissionManager.sol:424 |
 
 16 cases ran; 16 tests passed, 0 failed.
@@ -68,13 +68,15 @@ returns; Coinbase `spend(permission, 0)` reverts with selector `ZeroValue()`.
 The other like-for-like rows (1, 4-9, 13, 16) agree. Cases 3 and 10 also differ, but the rule excludes them: case 3 is
 the revocation model (a pause that keeps the counter has no Coinbase equivalent) and case 10 is the recipient (Coinbase
 has no way to name one). Cases 11, 12, 14 and 15 test something one side cannot express, so they are not like-for-like
-either.
+either. In cases 11 and 12 "agree" means both sides refuse the outcome (no TST moves, no approval is granted), not
+that both ran a matched action: Coinbase has no calldata or method input, and case 12's Coinbase attempt is the
+spender calling the wallet directly, outside Spend Permissions.
 
 ## What this does not show
 
 - It does not show harm. A zero-value spend moves nothing on either side (the test asserts both balances). Read from
   the code but not asserted: on MetaMask's side the accepted no-op still runs the enforcer's state update and emits
-  `TransferredInPeriod` (DF enforcer L193-230). This run did not measure whether any indexer, agent or accounting tool
+  `TransferredInPeriod` (DF enforcer L190-229). This run did not measure whether any indexer, agent or accounting tool
   treats the two outcomes differently.
 - It covers one MetaMask path: the kit's direct delegation (path A) on a `HybridDeleGator`. It does not cover the
   ERC-7715 Advanced Permissions grant from the MetaMask extension, which uses an EIP-7702 account and adds a
@@ -89,13 +91,17 @@ either.
 
 ## Predictions that were wrong
 
-Every outcome matched the scope's prediction (case 11 against its revised prediction) except one detail:
+Every outcome matched the scope's prediction (case 11 against its revised prediction). Two reasons did not:
 
 - **Case 12, `transferFrom` under the ERC-20 bundle.** Predicted: rejected as the wrong method
   (`ERC20PeriodTransferEnforcer:invalid-method`, DF L188). Got: rejected earlier by the calldata length check,
   `ERC20PeriodTransferEnforcer:invalid-execution-length` (DF L183), because `transferFrom` calldata is 100 bytes,
   not 68. `approve` (68 bytes) does hit `invalid-method` as predicted. The outcome (rejected) was right; the reason
   was not.
+- **Case 13, batch mode.** Predicted: batch mode is rejected by the period enforcer (DF L130). Got: rejected one caveat
+  earlier, by `ValueLteEnforcer`, the bundle's first caveat (`lib/df/src/enforcers/ValueLteEnforcer.sol:37`), with the
+  same `CaveatEnforcer:invalid-call-type` string from the shared modifier. The outcome (rejected) was right; the
+  enforcer that rejects it was not.
 
 Predictions the run confirmed that the scope marked as inferred: case 7 (MetaMask keeps the full allowance in a
 truncated last period when `TimestampEnforcer` sets the end), case 8 (a new delegation hash starts a fresh counter),
