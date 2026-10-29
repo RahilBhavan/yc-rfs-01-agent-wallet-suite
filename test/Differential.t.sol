@@ -377,6 +377,10 @@ contract DifferentialTest is Test {
         assertTrue(mmNext, "MM +1 at first second of period 2");
         assertTrue(cbNext, "CB +1 at first second of period 2");
 
+        assertEq(_moved(mmWallet), 101, "MM moved A before the boundary and 1 after it");
+        assertEq(_moved(address(wallet)), 101, "CB moved A before the boundary and 1 after it");
+        assertEq(token.balanceOf(spender), 202, "Spender received both wallets' boundary spends");
+
         _row(
             1,
             "period boundary",
@@ -400,6 +404,11 @@ contract DifferentialTest is Test {
         _assertRevert(cb, cbErr, abi.encodeWithSelector(ISpendPermissionManager.ZeroValue.selector), "CB refuses a zero spend");
         assertEq(_moved(mmWallet), 0, "MM: nothing moved");
         assertEq(_moved(address(wallet)), 0, "CB: nothing moved");
+        assertEq(token.balanceOf(spender), 0, "Zero-value trace: spender received no tokens");
+        (uint256 available,,) =
+            periodEnforcer.getAvailableAmount(dm.getDelegationHash(d), address(dm), d.caveats[1].terms);
+        assertEq(available, ALLOWANCE, "MM zero-value acceptance leaves the full allowance");
+        assertEq(spm.getCurrentPeriod(p).spend, 0, "CB zero-value rejection leaves the counter unchanged");
 
         _row(
             2,
@@ -478,6 +487,9 @@ contract DifferentialTest is Test {
         assertTrue(mm, "MM accepts a spend at t == S");
         assertTrue(cb, "CB accepts a spend at t == S");
 
+        assertEq(_moved(mmWallet), 1, "MM wallet balance: spend exactly at start");
+        assertEq(_moved(address(wallet)), 1, "CB wallet balance: spend exactly at start");
+
         _row(
             4,
             "exactly at start",
@@ -506,6 +518,9 @@ contract DifferentialTest is Test {
             ),
             "CB refuses a spend at S-1"
         );
+
+        assertEq(_moved(mmWallet), 0, "MM wallet balance: rejection before start");
+        assertEq(_moved(address(wallet)), 0, "CB wallet balance: rejection before start");
 
         _row(
             5,
@@ -546,6 +561,9 @@ contract DifferentialTest is Test {
         (bool mmBare,) = _mmSpend(bare, 1);
         assertTrue(mmBare, "MM bare bundle has no end and accepts at S+5P");
 
+        assertEq(_moved(mmWallet), 2, "MM wallet balance: end boundary including MM bare-bundle control");
+        assertEq(_moved(address(wallet)), 1, "CB wallet balance: end boundary including MM bare-bundle control");
+
         _row(
             6,
             "end boundary",
@@ -577,6 +595,9 @@ contract DifferentialTest is Test {
         (bool cbOver, bytes memory cbErr) = _cbSpend(p, 1);
         _assertRevert(mmOver, mmErr, _enfErr("transfer-amount-exceeded"), "MM +1 in the last period");
         _assertRevert(cbOver, cbErr, _cbExceeded(101, 100), "CB +1 in the last period");
+
+        assertEq(_moved(mmWallet), 100, "MM wallet balance: full spend in truncated last period");
+        assertEq(_moved(address(wallet)), 100, "CB wallet balance: full spend in truncated last period");
 
         _row(
             7,
@@ -671,6 +692,9 @@ contract DifferentialTest is Test {
         assertTrue(mmOne, "MM A after idle periods");
         assertTrue(cbOne, "CB A after idle periods");
 
+        assertEq(_moved(mmWallet), 110, "MM wallet balance: first period plus fresh allowance after idle");
+        assertEq(_moved(address(wallet)), 110, "CB wallet balance: first period plus fresh allowance after idle");
+
         _row(
             9,
             "long idle, no rollover",
@@ -715,6 +739,10 @@ contract DifferentialTest is Test {
         _assertRevert(ok, err, _mmErr("AllowedCalldataEnforcer:invalid-calldata"), "MM with payee rule: X refused");
         (ok,) = _mmTransfer(dPayee, spender, 10);
         assertTrue(ok, "MM with payee rule: payee accepted");
+        assertEq(token.balanceOf(x), 50, "Payee rule rejection did not pay X");
+        assertEq(token.balanceOf(spender), 60, "Spender received CB 50 and payee-rule MM 10");
+        assertEq(_moved(mmWallet), 60, "MM paid X 50 and the pinned payee 10");
+        assertEq(_moved(address(wallet)), 50, "CB paid the spender 50");
 
         _row(
             10,
@@ -746,6 +774,9 @@ contract DifferentialTest is Test {
         bytes memory tokenCall = abi.encodeCall(IERC20.transfer, (x, 1_000));
         (bool mm, bytes memory mmErr) = _mmExec(d, address(token), 0, tokenCall);
         _assertRevert(mm, mmErr, _mmErr("ExactCalldataEnforcer:invalid-calldata"), "MM kit native scope refuses calldata");
+        assertEq(token.balanceOf(x), 0, "MM SDK rejection paid no TST to X");
+        assertEq(_moved(mmWallet), 0, "MM SDK rejection moved no TST");
+        assertEq(mmWallet.balance, 1 ether, "MM SDK rejection moved no native token");
         (bool mmNative,) = _mmExec(d, spender, 1, hex"");
         assertTrue(mmNative, "MM kit native scope sends 1 wei");
         assertEq(spender.balance, 1, "MM: spender got 1 wei");
@@ -761,6 +792,8 @@ contract DifferentialTest is Test {
         assertTrue(cb, "CB native spend of 1 wei");
         assertEq(spender.balance, 2, "CB: spender got 1 more wei");
         assertEq(_moved(address(wallet)), 0, "CB moved no TST");
+        assertEq(mmWallet.balance, 1 ether - 1, "MM native permission debited exactly 1 wei");
+        assertEq(address(wallet).balance, 1 ether - 1, "CB native permission debited exactly 1 wei");
 
         _row(
             11,
@@ -792,6 +825,9 @@ contract DifferentialTest is Test {
         _assertRevert(cb, cbErr, abi.encodeWithSelector(MultiOwnable.Unauthorized.selector), "CB spender cannot call the wallet");
         assertEq(token.allowance(mmWallet, x), 0);
         assertEq(token.allowance(address(wallet), x), 0);
+        assertEq(_moved(mmWallet), 0, "MM wrong-method attempts moved no tokens");
+        assertEq(_moved(address(wallet)), 0, "CB unauthorized execution moved no tokens");
+        assertEq(token.balanceOf(x), 0, "Wrong-method attempts did not pay X");
 
         _row(
             12,
@@ -879,6 +915,9 @@ contract DifferentialTest is Test {
         (bool mm, bytes memory mmErr) = _mmSpend(d, 1);
         _assertRevert(mm, mmErr, _enfErr("invalid-zero-start-date"), "MM refuses startDate 0");
 
+        assertEq(_moved(mmWallet), 0, "MM wallet balance: zero-start configuration");
+        assertEq(_moved(address(wallet)), 100, "CB wallet balance: zero-start configuration");
+
         _row(
             14,
             "zero start in config",
@@ -899,14 +938,17 @@ contract DifferentialTest is Test {
         (bool mm,) = _mmSpend(d, big);
         assertTrue(mm, "MM accepts periodAmount and a spend of 2^160");
         assertEq(token.balanceOf(spender), big);
+        assertEq(token.balanceOf(mmWallet), 1_000, "MM debited exactly 2^160 from the minted balance");
 
         // Coinbase's allowance field is uint160. The same struct with allowance 2^160 in that word fails ABI
         // decoding, which reverts with no data.
         // Control: the same wide encoding with allowance 2^160 - 1 approves, so only the high bit causes the revert.
-        (bool cbMax,) = _cbApproveWide(big - 1);
-        assertTrue(cbMax, "CB approves the wide encoding at 2^160 - 1");
+        (bool cbMax, bytes memory cbMaxResult) = _cbApproveWide(big - 1);
+        assertTrue(cbMax, "CB accepts the wide encoding at 2^160 - 1");
+        assertTrue(abi.decode(cbMaxResult, (bool)), "CB approval at 2^160 - 1 returns true");
         (bool cb, bytes memory cbErr) = _cbApproveWide(big);
         _assertRevert(cb, cbErr, hex"", "CB cannot take an allowance of 2^160");
+        assertEq(token.balanceOf(address(wallet)), 1_000, "CB expressibility controls moved no tokens");
 
         _row(
             15,
@@ -982,6 +1024,10 @@ contract DifferentialTest is Test {
         uint256 cbSpent = spm.getCurrentPeriod(p).spend;
         assertEq(mmAvailable, 100, "MM counter did not move");
         assertEq(cbSpent, 0, "CB counter did not move");
+        assertEq(token.balanceOf(mmWallet), 50, "MM failed transfer preserved the wallet balance");
+        assertEq(token.balanceOf(address(wallet)), 50, "CB failed transfer preserved the wallet balance");
+        assertEq(token.balanceOf(spender), 0, "Failed transfers paid no tokens to the spender");
+        assertEq(token.balanceOf(sink), 1_900, "Only the setup transfers reached the sink");
 
         _row(
             16,
