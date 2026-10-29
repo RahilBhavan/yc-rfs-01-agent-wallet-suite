@@ -1,104 +1,90 @@
-# Agent-wallet test suite: MetaMask and Coinbase agree on 9 of 10 like-for-like per-period spending cases
+# Agent-wallet comparison prototype
 
-Prototype for the "Agent infra" ask in YC's October 2026 Crypto Request for Startups. Local Foundry only, no real funds.
+This local Foundry prototype compares a per-period ERC-20 budget in MetaMask's Delegation Framework and Coinbase
+Spend Permissions. It asks whether the same spending intent and action sequence produce the same outcome.
+It is part of Rahil Bhavan's build series responding to YC's October 2026 Crypto RFS, with no implied YC endorsement.
 
-This suite gives an agent the same per-period ERC-20 budget in two systems: MetaMask's Delegation Framework (a
-`HybridDeleGator` with the Smart Accounts Kit's ERC-20 periodic caveat bundle) and Coinbase Spend Permissions
-(`SpendPermissionManager` on a Coinbase Smart Wallet). Then it runs the same action sequence against both. It produces
-a 16-row table of outcomes, one row per edge case in the pinned scope, and one headline chosen by the scope's
-like-for-like rule.
+The recorded headline is a zero-value spend: MetaMask accepts `transfer(spender, 0)` while Coinbase reverts
+`ZeroValue()`. No tokens move on either side. This is a design difference, not a security or harm claim.
+[results.md](results.md) is the authoritative measured table, with its source commit, totals, predictions and limits.
+[The completion checklist](docs/completion.md) maps the pinned scope to evidence and open acceptance gates.
+Independent reproduction remains open; documentation completion does not close it.
 
-## Results
+## Run locally
 
-Measured Oct 29, 2026 at commit `b982780`, against MetaMask delegation-framework `b4b8c41` and Coinbase
-spend-permissions `e0004e6`. Source: [results.md](results.md), which holds the full `make reproduce` output.
-
-- **Headline, case 2 (zero-value spend):** at `S+10`, MetaMask accepts `transfer(spender, 0)` and Coinbase reverts
-  `ZeroValue()`. This is a design difference: Coinbase refuses zero spends
-  (`lib/sp/src/SpendPermissionManager.sol:692`); MetaMask's period enforcer checks only `amount <= available`
-  (`lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:210`). No tokens move on either side.
-- **Like-for-like agreement:** the other 9 like-for-like cases agree. They cover the period boundary, the start, the
-  end, a truncated last period, a mid-period allowance change, idle periods, two spends in one transaction and a
-  failed token transfer.
-- **Differences the rule excludes from the headline:** pause and resume (case 3: 60 left the MetaMask wallet in the
-  period, 120 left the Coinbase wallet), the recipient (case 10: MetaMask's bundle lets the agent pay any address,
-  Coinbase always pays the spender), `start = 0` (case 14) and amounts above `uint160` (case 15).
-- **Two predicted reasons were wrong, no outcomes:** case 12's `transferFrom` is rejected by the calldata length
-  check, not the method check, and case 13's batch mode is rejected by `ValueLteEnforcer`, not the period enforcer.
-  The details are in [results.md](results.md#predictions-that-were-wrong).
-
-## How it works
-
-- `test/Differential.t.sol` deploys both systems in one Foundry test contract. MetaMask: a real `DelegationManager`, a
-  `HybridDeleGator` behind an `ERC1967Proxy` and a delegation signed by its EOA owner, redeemed by the agent.
-  Coinbase: a real `CoinbaseSmartWallet` with the manager as an owner, an approved `SpendPermission` and `spend` from
-  the agent.
-- Each case is one test, `test_caseN_<what>`. It asserts what each side does and checks every rejection against its
-  exact revert data (error string or custom-error selector with arguments; in case 15, the empty revert of a failed
-  ABI decode, next to a control that passes), so a setup error cannot pass as an expected refusal. It then logs one result row.
-- `src/SpImports.sol` compiles Coinbase's manager with solc 0.8.30, because it needs `^0.8.28`. The tests, pinned to
-  0.8.23, load it with `vm.deployCode`.
-- `tools/reproduce.py` runs `forge test --offline`, checks that all 16 cases ran and passed, prints the table and picks
-  the headline. Timestamps are fixed with `vm.warp`, and the run uses no fuzzing, no RPC and no clock.
-
-## Run it
-
-Prerequisites: git, Foundry (`forge 1.8.6` was used), Python 3.
+Prerequisites: Git, GNU Make, Python 3 and Foundry **forge 1.8.6** on PATH. Initial setup needs network access to
+fetch recursive submodules and install solc 0.8.23 and 0.8.30. Tests use local simulated wallets and test tokens;
+no RPC URL, wallet credentials, funded account or running Anvil is required.
 
 ```sh
 git clone --recurse-submodules https://github.com/RahilBhavan/yc-rfs-01-agent-wallet-suite.git
 cd yc-rfs-01-agent-wallet-suite
-make test        # forge test: 16 tests, 16 passed on Oct 29, 2026
-make reproduce   # prints the 16-row table and the headline; exits non-zero if any case fails or is missing
+forge --version
+make test
+make reproduce
 ```
 
-If you cloned without `--recurse-submodules`, run `git submodule update --init --recursive` first. `make reproduce`
-runs offline, so run `make test` once first to let Foundry install solc 0.8.23 and 0.8.30.
+`make test` bootstraps compilation; `make reproduce` invokes `forge test --offline`, validates the case rows and
+prints the table and headline. Offline execution requires the compilers and sources to be present already.
+For a clone without submodules, run `git submodule update --init --recursive` before testing.
+Use [the reproduction guide](docs/reproduction.md) for an exact recorded-commit checkout, dependency checks,
+troubleshooting, the minimal headline trace and an independent review receipt.
 
-## Repository layout
+## What is compared
 
-- `test/`: the differential test contract, one test per scope case.
-- `src/`: the one-line import that compiles Coinbase's manager with a newer solc.
-- `tools/`: `reproduce.py`, the `make reproduce` script.
-- `lib/`: pinned upstream submodules, `df` (MetaMask delegation-framework) and `sp` (Coinbase spend-permissions).
-- `docs/`: the brief and the pinned scope.
-- `results.md`: the `make reproduce` output, the headline, its limits and the wrong predictions.
+MetaMask uses a real `DelegationManager` and an owner-signed delegation on a `HybridDeleGator` initialized behind an
+`ERC1967Proxy`. Solidity constructs the Smart Accounts Kit's direct `erc20PeriodTransfer` scope bundle:
+`ValueLteEnforcer(0)` followed by `ERC20PeriodTransferEnforcer`. Coinbase uses a real `CoinbaseSmartWallet` with
+`SpendPermissionManager` added as an owner, then an approved `SpendPermission` redeemed by the spender.
 
-## Documentation
+This models the kit's direct delegation path (path A), not the MetaMask extension's ERC-7715 Advanced Permissions
+grant (path B). The SDK, snap and docs were read at the scope's pinned revisions; their TypeScript was not executed.
+The native-token row is a separate bundle control. Expiry and payee cases add explicit caveats as described in the
+[pinned scope](docs/scope.md#metamasks-sdk-bundle).
 
-- [docs/scope.md](docs/scope.md): the pinned scope, with the shared rule, the side-by-side semantics with
-  `file:line` citations, the 16 edge cases with their predictions, and the headline rule.
-- [docs/brief.md](docs/brief.md): the original one-paragraph brief and the gates before anything is posted.
+Only like-for-like rows can supply the headline. Pause/resume uses different revocation primitives; Coinbase cannot
+name a third-party recipient; configuration widths and unavailable calldata/method paths are separate comparisons.
+In those rows, an “agree” label can mean both refuse an outcome, without matching API calls. Read each row's class
+and actions before interpreting it as equivalent behavior. See [results limits](results.md#what-this-does-not-show).
 
-## Sources
+## Find the evidence
 
-The suite runs upstream code at pinned commits, not bytecode deployed on any chain:
+| Path | Purpose |
+|---|---|
+| [docs/brief.md](docs/brief.md) | Original brief and publication gates; historical status text is not a completion record. |
+| [docs/scope.md](docs/scope.md) | Pinned decisions, versions, rule, source citations, predictions and exclusions. |
+| [docs/completion.md](docs/completion.md) | Acceptance checklist for each scope section and case; remaining gate owners/actions. |
+| [docs/reproduction.md](docs/reproduction.md) | Clean-clone instructions, trace, troubleshooting and reviewer handoff. |
+| [results.md](results.md) | Recorded `make reproduce` output at a named commit; no live totals maintained here. |
+| [test/Differential.t.sol](test/Differential.t.sol) | Local setup, assertions, exact revert checks and per-case result logs. |
+| [src/SpImports.sol](src/SpImports.sol) | Compiles Coinbase's manager separately; tests load artifacts through `vm.deployCode`. |
+| [tools/reproduce.py](tools/reproduce.py) | Offline runner, row validation and headline selection. |
+| [foundry.toml](foundry.toml), [remappings.txt](remappings.txt) | Mixed compiler configuration, Prague EVM and dependency import paths. |
+| `lib/df`, `lib/sp` | Pinned upstream submodules, including recursive dependencies. Never edit upstream code here. |
+| [.github/workflows/ci.yml](.github/workflows/ci.yml) | Recursive checkout, pinned Foundry, test and reproduction commands; configuration alone is not a passing run. |
 
-- [MetaMask/delegation-framework](https://github.com/MetaMask/delegation-framework) at `b4b8c41`, in `lib/df`.
-- [coinbase/spend-permissions](https://github.com/coinbase/spend-permissions) at `e0004e6`, in `lib/sp`.
-- [MetaMask/smart-accounts-kit](https://github.com/MetaMask/smart-accounts-kit) at `555dd20` and
-  [MetaMask/snap-7715-permissions](https://github.com/MetaMask/snap-7715-permissions) at `60c8a92`: read only, as the
-  source of MetaMask's caveat bundle. They are not dependencies.
+## Sources and credit
 
-## Scope and limits
+Runtime sources are [MetaMask Delegation Framework](https://github.com/MetaMask/delegation-framework) in `lib/df`
+and [Coinbase Spend Permissions](https://github.com/coinbase/spend-permissions) in `lib/sp`. Exact commits and
+source-line references live in [the version ledger](docs/scope.md#versions-pinned); the comparison cites repository
+code, not deployed bytecode. MetaMask Smart Accounts Kit, the gator-permissions snap and MetaMask docs supply the
+read-only bundle rationale at the revisions in that ledger.
 
-- Independent student prototype. Not affiliated with or endorsed by Y Combinator, MetaMask, Consensys or Coinbase.
-- Local Foundry only. No chain, no real funds, no securities offered, no investment advice, and no advice on which
-  system to use.
-- Each difference is reported as a design difference between two systems. None is claimed as a bug or a
-  vulnerability.
-- It covers MetaMask's direct delegation path on a `HybridDeleGator`, not the ERC-7715 grant from the MetaMask
-  extension. The kit's TypeScript was read, not run. [results.md](results.md#what-this-does-not-show) lists what
-  else the result does not show.
-- It runs 16 hand-written sequences, not a fuzz campaign.
-- Credits. These projects already work on this problem or this code, and this suite builds on them:
-  MetaMask's own Delegation Framework tests (especially
-  `test/enforcers/ERC20PeriodTransferEnforcer.t.sol` and the `HybridDeleGator` deployment in `test/utils/BaseTest.t.sol`)
-  and Coinbase's Spend Permissions tests; Warden, AgentScope and AgentTrust (existing agent-wallet work); Rhinestone
-  ModuleKit (module testing toolkit for smart accounts); and the related hub project kya-protocol.
+MetaMask's own enforcer tests and `test/utils/BaseTest.t.sol` inform the allowance and proxy setup. Coinbase's
+Spend Permissions tests inform the spending, revocation and replacement checks. Warden, AgentScope and AgentTrust
+are existing agent-wallet work named in the brief; no compatibility with or evaluation of those projects is claimed.
+Rhinestone ModuleKit is credited as an existing smart-account module testing toolkit. kya-protocol is a related hub
+project. These credits do not imply affiliation or endorsement.
 
-## License
+## Limits and completion
 
-No license file yet.
+Local prototype only: no real funds, mainnet interaction, investment advice, product recommendation or claim that a
+company is operating. Hand-written sequences are not an exhaustive equivalence proof or a fuzz campaign. Delegation
+chains, ERC-4337, paymasters, MagicSpend, SpendRouter and ERC-6492 wallet flows remain outside the comparison.
+A validator artifact used during setup does not establish coverage of ERC-6492 wallet flows.
 
-Part of [Rahil Bhavan's projects](https://github.com/RahilBhavan).
+The control hub at `~/projects/yc-rfs-builds` owns independent-reproduction and publication gate records. This repo
+supplies evidence; [the open-gate checklist](docs/completion.md#remaining-gates-and-integration) describes the handoff.
+No license file is present at the repository root. This documentation grants no new license terms; upstream projects
+retain their own notices and terms.
