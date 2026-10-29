@@ -18,8 +18,8 @@ mkdir -p "$HOME/scratch/yc-rfs-builds"
 git clone https://github.com/RahilBhavan/yc-rfs-01-agent-wallet-suite.git \
   "$HOME/scratch/yc-rfs-builds/wallet-reproduction-review"
 cd "$HOME/scratch/yc-rfs-builds/wallet-reproduction-review"
-# Exact measurement recorded in results.md; check out before fetching its dependencies.
-git checkout --detach b9827800f1a5aec7ed67f6586e6193d48c69bc37
+# For the exact recorded measurement, check out the full commit in results.md here.
+# For a proposed integration, check out its full commit instead.
 git submodule update --init --recursive
 forge --version
 python3 --version
@@ -27,9 +27,8 @@ make test
 make reproduce
 ```
 
-The measured revision predates these completion docs; keep this guide available separately. To validate an integration
-revision instead, check out its full SHA before initializing submodules and record that SHA in the receipt. Do not
-label that run as the historical measurement.
+Record the full checkout SHA in the receipt. To reproduce the recorded measurement exactly, use the commit named
+in results.md before initializing submodules. A later integration revision needs its own receipt.
 
 Network access is needed for cloning, recursive submodule downloads and initial compiler downloads. `make test`
 allows Foundry to install the required solc versions. MetaMask's sources require 0.8.23; Coinbase's manager is compiled
@@ -62,8 +61,8 @@ revision and `U` means a conflict. Also inspect `git status --short`: submodule 
 contents. Do not use `git submodule update --remote`, edit `lib/`, or replace pinned dependencies.
 
 The output header identifies the checkout, not the historical results commit unless that is what you checked out.
-The runner appends `+dirty` for tracked changes reported by Git, including dirty submodules. It ignores untracked
-files for that suffix, so retain the separate status receipt. A clean integration revision can legitimately have a
+The integrated runner verifies Forge 1.8.6, top-level and recursive dependency pins, and case-to-test attribution.
+It appends `+dirty` for tracked or untracked changes reported by Git, including dirty submodules. Retain the status receipt. A clean integration revision can legitimately have a
 different header; compare case order, classes, actions, outcomes, citations and headline against results.md, not just
 the totals. Explain every difference. Preserve failures as well as successes; never hand-edit the measured table.
 
@@ -78,11 +77,12 @@ The shared intent is one agent's budget of `A = 100` test-token units per `P = 1
    It reverts `ZeroValue()`.
 3. Both wallet token balances are unchanged. The result distinguishes acceptance from rejection, not money moved.
 
-[The test](../test/Differential.t.sol), `test_case2_zeroValue` at line 392, asserts success, exact Coinbase revert data
-and both balance deltas. `setUp` at line 133 constructs the actual local accounts and managers; `_caveats` at line 175
-constructs the bundle in Solidity rather than executing the SDK. For a focused call trace after the first build:
+[The test](../test/Differential.t.sol), `test_case2_zeroValue`, asserts success, exact Coinbase revert data
+and both balance deltas. `setUp` constructs the actual local accounts and managers; `_caveats`
+constructs the bundle in Solidity rather than executing the SDK. For a focused call trace, build all artifacts first (the Coinbase manager is loaded dynamically):
 
 ```sh
+forge build --offline
 forge test --offline --match-test '^test_case2_zeroValue$' -vvvv
 ```
 
@@ -96,14 +96,15 @@ signature and approval already exist. It shows no downstream harm, gas compariso
 
 | Symptom | Diagnosis and action |
 |---|---|
-| `forge: command not found` or Python `FileNotFoundError: 'forge'` | Check `command -v forge` and PATH; use the Foundry bin directory above if installed, then verify v1.8.6. |
+| `forge: command not found` or `cannot run forge` | Check `command -v forge` and PATH; use the Foundry bin directory above if installed, then verify v1.8.6. |
 | Missing `lib/sp/src/...`, `forge-std`, OpenZeppelin or another import | Inspect recursive submodule status. In a fresh clone, run `git submodule update --init --recursive` and retry `make test`. An empty directory is not an initialized dependency. |
 | `+`/`U` submodules or dirty upstream contents | Do not reset a shared worktree or discard another worker's changes. Use a new clean clone at the target SHA. Initialization is a setup operation for that clone, not permission to alter shared `lib/`. |
 | Offline compiler missing, version resolution failure | Run `make test` with network available to obtain solc 0.8.23 and 0.8.30. Retry offline reproduction afterward. |
-| `forge printed no JSON` | Read the preceding stderr first. The runner's parenthetical compiler hint is generic: missing source imports can produce the same message. |
+| `forge printed no JSON` | Read the command diagnostics first; check missing compiler and source dependencies. The integrated runner reports nonzero Forge exits before parsing JSON. |
 | Wrong compiler/EVM or missing `vm.deployCode` artifact | Check `foundry.toml`, `remappings.txt`, `src/SpImports.sol` and tool version at the selected SHA. After dependencies are correct, `forge clean` in your disposable clone followed by `make test` rebuilds artifacts. |
 | GitHub authentication/repository access failure | Obtain access through the repository owner using your normal Git credentials. Do not insert secrets into commands, docs or receipts. |
-| Missing/duplicate row, failed test, changed headline | Save stderr and exit status; inspect the failing case with `forge test --offline --match-test '<exact test name>' -vvvv`. Report the failure and revision. Do not weaken assertions or update results to force agreement. |
+| Missing/duplicate row, failed test, changed headline | Save stderr and exit status; inspect the failing case with `forge build --offline
+forge test --offline --match-test '<exact test name>' -vvvv`. Report the failure and revision. Do not weaken assertions or update results to force agreement. |
 
 No node/npm install, SDK build, deployment, key provisioning or testnet faucet is part of this procedure.
 
