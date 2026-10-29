@@ -44,7 +44,8 @@ def collect(suites):
         for name, result in suite["test_results"].items():
             total += 1
             if result["status"] != "Success":
-                failed.append(f"{name}: {result.get('reason')}")
+                errors = [l for l in result["decoded_logs"] if not l.startswith("ROW\t")]
+                failed.append(f"{name}: {result.get('reason') or '; '.join(errors) or 'failed'}")
             for line in result["decoded_logs"]:
                 if not line.startswith("ROW\t"):
                     continue

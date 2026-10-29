@@ -12,7 +12,7 @@ pragma solidity 0.8.23;
 //   (packages/smart-accounts-kit/src/caveatBuilder/scope/erc20PeriodicScope.ts L24-33).
 //
 // Every rejection is checked against the exact revert data, so a setup error cannot pass as an expected refusal.
-// Each test ends with one ROW line (tab-separated) that script/reproduce.py turns into the results table:
+// Each test ends with one ROW line (tab-separated) that tools/reproduce.py turns into the results table:
 // case, name, class, MetaMask outcome, Coinbase outcome, agree/differ, file:line.
 
 import { Test } from "forge-std/Test.sol";
@@ -882,7 +882,7 @@ contract DifferentialTest is Test {
         _row(
             14,
             "zero start in config",
-            "configuration (kit refuses to build it)",
+            "configuration (kit refuses per source, not run)",
             "hand-built startDate 0: invalid-zero-start-date",
             "start 0 approved; spend(100) ok",
             mm == cb,
@@ -902,6 +902,24 @@ contract DifferentialTest is Test {
 
         // Coinbase's allowance field is uint160. The same struct with allowance 2^160 in that word fails ABI
         // decoding, which reverts with no data.
+        // Control: the same wide encoding with allowance 2^160 - 1 approves, so only the high bit causes the revert.
+        (bool cbMax,) = _cbApproveWide(big - 1);
+        assertTrue(cbMax, "CB approves the wide encoding at 2^160 - 1");
+        (bool cb, bytes memory cbErr) = _cbApproveWide(big);
+        _assertRevert(cb, cbErr, hex"", "CB cannot take an allowance of 2^160");
+
+        _row(
+            15,
+            "amount above uint160",
+            "expressibility (CB is uint160)",
+            "periodAmount 2^160 signed; spend of 2^160 ok",
+            "approve with allowance 2^160 reverts in ABI decoding (2^160 - 1 approves)",
+            mm == cb,
+            "lib/sp/src/SpendPermissionManager.sol:37; lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:157"
+        );
+    }
+
+    function _cbApproveWide(uint256 allowance) internal returns (bool ok, bytes memory ret) {
         bytes memory wide = abi.encodePacked(
             ISpendPermissionManager.approve.selector,
             abi.encode(
@@ -909,7 +927,7 @@ contract DifferentialTest is Test {
                     account: address(wallet),
                     spender: spender,
                     token: address(token),
-                    allowance: big,
+                    allowance: allowance,
                     period: uint48(PERIOD),
                     start: uint48(START),
                     end: type(uint48).max,
@@ -919,18 +937,7 @@ contract DifferentialTest is Test {
             )
         );
         vm.prank(address(wallet));
-        (bool cb, bytes memory cbErr) = address(spm).call(wide);
-        _assertRevert(cb, cbErr, hex"", "CB cannot take an allowance of 2^160");
-
-        _row(
-            15,
-            "amount above uint160",
-            "expressibility (CB is uint160)",
-            "periodAmount 2^160 signed; spend of 2^160 ok",
-            "allowance 2^160 does not decode (uint160 field); approve reverts",
-            mm == cb,
-            "lib/sp/src/SpendPermissionManager.sol:37; lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:157"
-        );
+        (ok, ret) = address(spm).call(wide);
     }
 
     struct WidePermission {
