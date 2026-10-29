@@ -18,3 +18,5 @@ jobs:
       - if: hashFiles('package.json') != ''
         run: npm ci
       - run: make test
+      - if: hashFiles('foundry.toml') != ''
+        run: make reproduce
