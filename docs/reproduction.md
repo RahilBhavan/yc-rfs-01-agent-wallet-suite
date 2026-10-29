@@ -93,7 +93,7 @@ can omit their artifacts even when its Solidity imports compile successfully:
 
 ```sh
 forge build --offline
-forge test --offline --match-test '^test_case2_zeroValue$' -vvvv
+forge test --offline --match-test test_case2_zeroValue -vvvv
 ```
 
 At the pinned upstream commits, Coinbase's `lib/sp/src/SpendPermissionManager.sol:692` rejects zero; MetaMask's
