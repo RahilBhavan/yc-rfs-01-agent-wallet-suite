@@ -1,0 +1,17 @@
+forge-std/=lib/df/lib/forge-std/src/
+@openzeppelin/contracts/=lib/df/lib/openzeppelin-contracts/contracts/
+@erc7579/=lib/df/lib/erc7579-implementation/src/
+@account-abstraction/=lib/df/lib/account-abstraction/contracts/
+@bytes-utils/=lib/df/lib/solidity-bytes-utils/contracts/
+@solidity-stringutils/=lib/df/lib/solidity-stringutils/src/
+@FCL/=lib/df/lib/FCL/solidity/src/
+@SCL/=lib/df/lib/SCL/src/
+openzeppelin-contracts/=lib/sp/lib/openzeppelin-contracts/
+solady/=lib/sp/lib/solady/src/
+smart-wallet/=lib/sp/lib/smart-wallet/src/
+magicspend/=lib/sp/lib/magicspend/src/
+webauthn-sol/=lib/sp/lib/webauthn-sol/src/
+FreshCryptoLib/=lib/sp/lib/webauthn-sol/lib/FreshCryptoLib/solidity/src/
+account-abstraction/=lib/sp/lib/account-abstraction/contracts/
+df/=lib/df/src/
+sp/=lib/sp/src/

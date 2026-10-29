@@ -1,0 +1,6 @@
+[submodule "lib/df"]
+	path = lib/df
+	url = https://github.com/MetaMask/delegation-framework
+[submodule "lib/sp"]
+	path = lib/sp
+	url = https://github.com/coinbase/spend-permissions
