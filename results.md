@@ -7,7 +7,7 @@ systems that encode the same rule in different ways. It is not a claim of a bug 
 |---|---|
 | Headline | Case 2, zero-value spend: MetaMask accepts `transfer(spender, 0)`, Coinbase reverts `ZeroValue` |
 | Command | `make reproduce` |
-| Commit | `a2b29ce484c1dd5f8bd0627f844bd7a5966762c1` |
+| Commit | `b4c0302565af0af8bcca08c9645fd4f97fd25a97` |
 | Measured on | Oct 29, 2026 (forge 1.8.6, solc 0.8.23 and 0.8.30) |
 | Upstreams | MetaMask delegation-framework `b4b8c41`, Coinbase spend-permissions `e0004e6` (submodules in `lib/`) |
 | Tests | 16 of 16 passed, one per scope case |
@@ -20,7 +20,7 @@ otherwise. Each row comes from one test in `test/Differential.t.sol`; the test a
 exact revert data of every rejection.
 
 ```text
-commit a2b29ce484c1dd5f8bd0627f844bd7a5966762c1
+commit b4c0302565af0af8bcca08c9645fd4f97fd25a97
 MetaMask delegation-framework b4b8c41fc912455a1af2300bfcd1276676b92a2e, Coinbase spend-permissions e0004e63edc4e17de7aa978293800ac7a16892e5
 
 | Case | Class | MetaMask (HybridDeleGator + kit ERC-20 periodic scope) | Coinbase (SpendPermissionManager) | Result | file:line |

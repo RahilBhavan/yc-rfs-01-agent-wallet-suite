@@ -69,6 +69,8 @@ the scope's revised SDK-bundle prediction, with the bare-enforcer result explici
 
 ## Integrated validation
 
+[The final verification receipt](verification.md) records the clean-clone check and multi-agent review.
+
 The integration runs `make test` (Python collector tests and all Solidity cases) and `make reproduce` against the
 pinned dependencies. The exact measurement and commit are in results.md. Source-only limits remain explicit:
 the SDK TypeScript is not executed, and Coinbase's absent calldata/method interfaces are source-inspection claims.
