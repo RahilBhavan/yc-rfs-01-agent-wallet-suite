@@ -80,7 +80,7 @@ integration should also be tested at its own full SHA and identified separately 
 
 Isolated thread worktrees initially lacked complete recursive dependencies. Those setup failures were not case
 outcomes. The integrated checkout has initialized pins and passes the recorded run. A different reviewer must still
-follow the clean-clone guide; a producer's successful run does not close independent reproduction.
+follow the clean-clone guide; the independent different-provider run is now documented in [the review receipt](reviews/2026-10-31-independent-reproduction.md).
 
 ## Remaining gates and integration
 
@@ -92,9 +92,9 @@ hub records, CI run history or a publication approval. The hub owner reconciles 
 - [ ] **finding_measured — reconcile hub evidence.** Repository measurement is present at the full SHA in results.md.
   Hub owner associates repo URL, measured SHA, headline and `results.md` path with the gate. A docs-only integration
   SHA is not a replacement measured-code SHA; remeasure if the integrated code changes.
-- [ ] **independent_reproduction — open explicitly in results.md.** A different reviewer follows the hub brief from a
-  clean clone and returns the [review receipt](reproduction.md#independent-reviewer-receipt). Hub owner accepts or
-  records blockers. This documentation audit cannot substitute for that reviewer.
+- [ ] **independent_reproduction — new receipt ready for hub reconciliation.** Claude Sonnet 5.5 independently ran a
+  fresh clone of `ba2d4d5` and returned REPRODUCED. See [the receipt](reviews/2026-10-31-independent-reproduction.md).
+  The hub already records a predecessor reproduction; its owner can associate this newer evidence with the gate.
 - [ ] **exhibit_review_passed — hub-owned, not evidenced here.** After reproduction, hub owner arranges the required
   exhibit and review outside this repo. No exhibit is drafted here.
 - [ ] **post_approved_by_rahil — hub-owned, not evidenced here.** Rahil must approve under the hub workflow; a code or

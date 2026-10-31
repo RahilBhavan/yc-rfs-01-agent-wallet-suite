@@ -11,7 +11,7 @@ systems that encode the same rule in different ways. It is not a claim of a bug 
 | Measured on | Oct 29, 2026 (forge 1.8.6, solc 0.8.23 and 0.8.30) |
 | Upstreams | MetaMask delegation-framework `b4b8c41`, Coinbase spend-permissions `e0004e6` (submodules in `lib/`) |
 | Tests | 16 of 16 passed, one per scope case |
-| Independent reproduction | Not yet (hub gate `independent_reproduction`) |
+| Independent reproduction | REPRODUCED by Claude Sonnet 5.5 at `ba2d4d5`; [receipt](docs/reviews/2026-10-31-independent-reproduction.md). Hub reconciliation remains separate. |
 
 ## `make reproduce` output
 
