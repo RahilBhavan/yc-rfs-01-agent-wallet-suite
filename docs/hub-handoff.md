@@ -7,6 +7,7 @@ PR: https://github.com/RahilBhavan/yc-rfs-01-agent-wallet-suite/pull/2
 
 - Scope is pinned in docs/scope.md. The hub already records `scope_pinned` on Oct 29.
 - Latest measured-code commit: `b4c0302565af0af8bcca08c9645fd4f97fd25a97`.
+  Tagged `build1-measured` so it stays reachable after the squash merge; its code matches `main` at `874a421`.
   Complete unedited measurement is in results.md, committed at `ba2d4d5d51145a764d012fc38cb24c005791cbba`.
 - Headline: case 2 differs like-for-like. MetaMask accepts zero; Coinbase rejects with ZeroValue. No tokens move.
   Other like-for-like cases agree. Preserve the full denominators, case classes and limits in results.md.
