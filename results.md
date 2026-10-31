@@ -7,11 +7,11 @@ systems that encode the same rule in different ways. It is not a claim of a bug 
 |---|---|
 | Headline | Case 2, zero-value spend: MetaMask accepts `transfer(spender, 0)`, Coinbase reverts `ZeroValue` |
 | Command | `make reproduce` |
-| Commit | `b9827800f1a5aec7ed67f6586e6193d48c69bc37` |
+| Commit | `b4c0302565af0af8bcca08c9645fd4f97fd25a97` |
 | Measured on | Oct 29, 2026 (forge 1.8.6, solc 0.8.23 and 0.8.30) |
 | Upstreams | MetaMask delegation-framework `b4b8c41`, Coinbase spend-permissions `e0004e6` (submodules in `lib/`) |
 | Tests | 16 of 16 passed, one per scope case |
-| Independent reproduction | Not yet (hub gate `independent_reproduction`) |
+| Independent reproduction | REPRODUCED by Claude Sonnet 5.5 at `ba2d4d5`; [receipt](docs/reviews/2026-10-31-independent-reproduction.md). Hub reconciliation remains separate. |
 
 ## `make reproduce` output
 
@@ -20,8 +20,8 @@ otherwise. Each row comes from one test in `test/Differential.t.sol`; the test a
 exact revert data of every rejection.
 
 ```text
-commit b9827800f1a5aec7ed67f6586e6193d48c69bc37
-MetaMask delegation-framework b4b8c41, Coinbase spend-permissions e0004e6
+commit b4c0302565af0af8bcca08c9645fd4f97fd25a97
+MetaMask delegation-framework b4b8c41fc912455a1af2300bfcd1276676b92a2e, Coinbase spend-permissions e0004e63edc4e17de7aa978293800ac7a16892e5
 
 | Case | Class | MetaMask (HybridDeleGator + kit ERC-20 periodic scope) | Coinbase (SpendPermissionManager) | Result | file:line |
 |---|---|---|---|---|---|
@@ -60,7 +60,7 @@ same intent with its standard primitives, and the same action sequence then gets
 - Same action: at `S+10` the agent asks to move 0 TST to itself.
 - Different outcome: Coinbase reverts `ZeroValue()` (`lib/sp/src/SpendPermissionManager.sol:692`). MetaMask accepts:
   the period enforcer checks `amount <= available`, and `0 <= 100` (`lib/df/src/enforcers/ERC20PeriodTransferEnforcer.sol:210`);
-  `ValueLteEnforcer` limits native `value`, not the token amount. No tokens move on either side.
+  `ValueLteEnforcer` limits native `value`, not the token amount. No tokens move on either side. The test also checks that the full MetaMask allowance remains available and Coinbase records no spend.
 
 Minimal trace (`test_case2_zeroValue`): `vm.warp(S+10)`; MetaMask `redeemDelegations` with `token.transfer(spender, 0)`
 returns; Coinbase `spend(permission, 0)` reverts with selector `ZeroValue()`.
