@@ -8,7 +8,7 @@ The recorded headline is a zero-value spend: MetaMask accepts `transfer(spender,
 `ZeroValue()`. No tokens move on either side. This is a design difference, not a security or harm claim.
 [results.md](results.md) is the authoritative measured table, with its source commit, totals, predictions and limits.
 [The completion checklist](docs/completion.md) maps the pinned scope to evidence and open acceptance gates.
-Independent reproduction remains open; documentation completion does not close it.
+A different reviewer reproduced it from a fresh clone; see [the receipt](docs/reviews/2026-10-31-independent-reproduction.md).
 
 ## Run locally
 
